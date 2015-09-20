@@ -36,7 +36,6 @@ sqlman_add() {
 	locate_changes_dir
 	locate_change_dir "$1"
 	[ -e "$CHANGE_DIR" ] && die "'$CHANGE_DIR' exists" || true
-	mkdir -p "$CHANGE_DIR"
 
 	locate_plan_file
 	[ -f "$PLAN_FILE" ] && grep "^$1$" "$PLAN_FILE" > /dev/null && \
@@ -44,6 +43,7 @@ sqlman_add() {
 
 	locate_engine_dir
 	TEMPLATE_DIR="${ENGINE_DIR}/template"
+	mkdir -p "$CHANGE_DIR"
 	cp -r "$TEMPLATE_DIR"/* "$CHANGE_DIR"
 	echo "$1" >> "$PLAN_FILE"
 
@@ -68,7 +68,7 @@ sqlman_status() {
 		locate_change_scripts
 
 		[ ! -f "$CHECK_SCRIPT" ] && die "Cannot find check script '$CHECK_SCRIPT'" || true
-		if run_script "$CHECK_SCRIPT" > /dev/null; then
+		if run_script "$CHECK_SCRIPT" > /dev/null 2>&1; then
 			echo "$CHANGE: y"
 		else
 			echo "$CHANGE: n"
@@ -98,7 +98,7 @@ sqlman_deploy() {
 		locate_change_dir "$CHANGE"
 		locate_change_scripts
 
-		if run_script "$CHECK_SCRIPT" 2> /dev/null; then
+		if run_script "$CHECK_SCRIPT" > /dev/null 2>&1; then
 			continue
 		else
 			echo -n "${CHANGE} -> deploy: "
@@ -146,7 +146,7 @@ sqlman_revert() {
 		locate_change_dir "$CHANGE"
 		locate_change_scripts
 
-		if run_script "$CHECK_SCRIPT" 2> /dev/null; then
+		if run_script "$CHECK_SCRIPT" > /dev/null 2>&1; then
 			echo -n "${CHANGE} -> revert: "
 			if run_script "$REVERT_SCRIPT"; then
 				echo -n "ok"
@@ -156,7 +156,7 @@ sqlman_revert() {
 			fi
 
 			echo -n " -> verify: "
-			if run_script "$CHECK_SCRIPT"; then
+			if run_script "$CHECK_SCRIPT" > /dev/null 2>&1; then
 				echo "failed"
 				exit 1
 			else

@@ -1,0 +1,6 @@
+-- -*- mode: sql -*-
+-- vi: set ft=sql :
+
+-- Deploy
+
+CREATE TABLE test_table(id TEXT PRIMARY KEY);

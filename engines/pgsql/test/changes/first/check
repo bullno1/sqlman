@@ -1,0 +1,6 @@
+-- -*- mode: sql -*-
+-- vi: set ft=sql :
+
+-- Check
+
+SELECT id FROM test_table WHERE FALSE;

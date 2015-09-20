@@ -1,0 +1,5 @@
+-- -*- mode: sql -*-
+-- vi: set ft=sql :
+
+-- Check
+SELECT data FROM test_table WHERE FALSE;

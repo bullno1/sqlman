@@ -1,0 +1,79 @@
+#!/bin/sh -e
+
+SQLMAN=$(readlink -f ../../../sqlman)
+
+main() {
+	dropdb sqlman-test1 || true
+	dropdb sqlman-test2 || true
+	createdb sqlman-test1
+	createdb sqlman-test2
+	echo "Test deployment ================================="
+	$SQLMAN status > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	assert $SQLMAN deploy
+	$SQLMAN status > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	$SQLMAN status default > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	$SQLMAN status alternative > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	assert $SQLMAN deploy second alternative
+	$SQLMAN status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: n' tmp
+
+	assert $SQLMAN deploy third alternative
+	$SQLMAN status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	echo "================================================="
+	echo ""
+
+	echo "Test revert ====================================="
+	assert $SQLMAN revert
+
+	$SQLMAN status > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	$SQLMAN revert second alternative
+	$SQLMAN status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	$SQLMAN revert first alternative
+	$SQLMAN status alternative > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	echo "================================================="
+	echo ""
+}
+
+assert() {
+	"$@" || { echo "'$@' -> $?"; exit 1; }
+}
+
+assert_fail() {
+	"$@" && { echo "'$@' -> $?"; exit 1; } || true
+}
+
+main $@

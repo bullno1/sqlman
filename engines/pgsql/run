@@ -1,0 +1,4 @@
+#!/bin/sh -e
+
+. $1
+exec psql --single-transaction -v ON_ERROR_STOP=1 -d $DATABASE $EXTRA_ARGS <&0 > /dev/null

@@ -1,0 +1,6 @@
+-- -*- mode: sql -*-
+-- vi: set ft=sql :
+
+-- Revert
+
+ALTER TABLE test_table DROP COLUMN data;

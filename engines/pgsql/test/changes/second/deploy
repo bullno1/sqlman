@@ -1,0 +1,6 @@
+-- -*- mode: sql -*-
+-- vi: set ft=sql :
+
+-- Deploy
+
+ALTER TABLE test_table ADD COLUMN data INTEGER;
