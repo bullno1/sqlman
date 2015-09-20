@@ -196,7 +196,7 @@ locate_target() {
 
 locate_target_file() {
 	TARGETS_DIR="${TARGETS_DIR:-targets}"
-	TARGET_FILE="$TARGETS_DIR/$TARGET"
+	TARGET_FILE=$(readlink -f "$TARGETS_DIR/$TARGET")
 }
 
 locate_change_scripts() {
