@@ -1,0 +1,107 @@
+#!/bin/sh -e
+
+main() {
+	rm -rf test_dir
+	mkdir test_dir
+	cp sqlman test_dir
+	cp -r test_common/engine test_dir
+	cd test_dir
+
+	echo "Test usage ======================================"
+	assert_fail ./sqlman
+	assert_fail ./sqlman random shit
+	echo "================================================="
+	echo ""
+
+	echo "Test add ========================================"
+	assert_fail ./sqlman add
+	assert ./sqlman add first
+	assert_fail ./sqlman add first
+	assert ./sqlman add second
+	rm -rf changes
+	assert_fail ./sqlman add first
+	assert_fail ./sqlman add second
+	assert ./sqlman add third
+	echo "================================================="
+	echo ""
+
+	echo "Test deployment ================================="
+	rm -rf changes
+	rm sqlman.plan
+	./sqlman add first
+	./sqlman add second
+	./sqlman add third
+	mkdir targets
+	touch targets/default
+	touch targets/alternative
+	cp -r ../test_common/changes .
+
+	./sqlman status > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	assert ./sqlman deploy
+	./sqlman status > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	./sqlman status default > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	./sqlman status alternative > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	assert ./sqlman deploy second alternative
+	./sqlman status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: n' tmp
+
+	assert ./sqlman deploy third alternative
+	./sqlman status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: y' tmp
+	assert grep 'third: y' tmp
+
+	echo "================================================="
+	echo ""
+
+	echo "Test revert ====================================="
+	assert ./sqlman revert
+
+	./sqlman status > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	./sqlman revert second alternative
+	./sqlman status alternative > tmp
+	assert grep 'first: y' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	./sqlman revert first alternative
+	./sqlman status alternative > tmp
+	assert grep 'first: n' tmp
+	assert grep 'second: n' tmp
+	assert grep 'third: n' tmp
+
+	echo "================================================="
+	echo ""
+}
+
+assert() {
+	"$@" || { echo "'$@' -> $?"; exit 1; }
+}
+
+assert_fail() {
+	"$@" && { echo "'$@' -> $?"; exit 1; } || true
+}
+
+main $@

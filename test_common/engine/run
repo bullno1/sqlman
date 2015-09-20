@@ -1,0 +1,4 @@
+#!/bin/sh
+
+DATA_DIR="data/`basename $1`"
+mkdir -p "$DATA_DIR" && cd "$DATA_DIR" && sh <&0

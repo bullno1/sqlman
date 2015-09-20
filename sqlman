@@ -1,0 +1,212 @@
+#!/bin/bash -e
+
+main() {
+	[ $# -eq 0 ] && show_usage
+
+	# Load config
+	[ -f ./sqlman.config ] && . ./sqlman.config || true
+
+	if type "sqlman_${1}" > /dev/null 2>&1; then
+		"sqlman_${@}"
+	else
+		die "Invalid command '$1'"
+	fi
+}
+
+die() {
+	echo "sqlman: $*" >&2
+	exit 1
+}
+
+show_usage() {
+	cat << USAGE_HEREDOC
+
+usage: sqlman <command>
+USAGE_HEREDOC
+	exit 1
+}
+
+has_cmd() {
+	type "sqlman_${1}" > /dev/null 2>&1
+}
+
+sqlman_add() {
+	[ "$#" -ne 1 ] && die "usage: sqlman_add <name>" || true
+
+	locate_changes_dir
+	locate_change_dir "$1"
+	[ -e "$CHANGE_DIR" ] && die "'$CHANGE_DIR' exists" || true
+	mkdir -p "$CHANGE_DIR"
+
+	locate_plan_file
+	[ -f "$PLAN_FILE" ] && grep "^$1$" "$PLAN_FILE" > /dev/null && \
+	die "'$1' is already present in '$PLAN_FILE'" || true
+
+	locate_engine_dir
+	TEMPLATE_DIR="${ENGINE_DIR}/template"
+	cp -r "$TEMPLATE_DIR"/* "$CHANGE_DIR"
+	echo "$1" >> "$PLAN_FILE"
+
+	echo "Created $CHANGE_DIR"
+}
+
+sqlman_status() {
+	locate_plan_file
+	[ ! -f "$PLAN_FILE" ] && die "Cannot find plan file: '$PLAN_FILE'" || true
+
+	locate_target "$1"
+	locate_target_file
+	[ ! -f "$TARGET_FILE" ] && die "Cannot find target file: '$TARGET_FILE" || true
+
+	locate_engine_dir
+	locate_changes_dir
+
+	while read -r CHANGE
+	do
+		[ -z "$CHANGE" ] && continue || true
+		locate_change_dir "$CHANGE"
+		locate_change_scripts
+
+		[ ! -f "$CHECK_SCRIPT" ] && die "Cannot find check script '$CHECK_SCRIPT'" || true
+		if run_script "$CHECK_SCRIPT" > /dev/null; then
+			echo "$CHANGE: y"
+		else
+			echo "$CHANGE: n"
+		fi
+	done < $PLAN_FILE
+}
+
+sqlman_deploy() {
+	locate_plan_file
+	[ ! -f "$PLAN_FILE" ] && die "Cannot find plan file: '$PLAN_FILE'" || true
+
+	locate_target "$2"
+	locate_target_file
+	[ ! -f "$TARGET_FILE" ] && die "Cannot find target file: '$TARGET_FILE" || true
+
+	LAST_CHANGE=$1
+	if [ ! -z "$LAST_CHANGE" ] && ! grep "^$LAST_CHANGE$" "$PLAN_FILE" ; then
+		die "Cannot find change '$LAST_CHANGE' in plan file: '$PLAN_FILE'"
+	fi
+
+	locate_engine_dir
+	locate_changes_dir
+
+	while read -r CHANGE
+	do
+		[ -z "$CHANGE" ] && continue || true
+		locate_change_dir "$CHANGE"
+		locate_change_scripts
+
+		if run_script "$CHECK_SCRIPT" 2> /dev/null; then
+			continue
+		else
+			echo -n "${CHANGE} -> deploy: "
+			if run_script "$DEPLOY_SCRIPT"; then
+				echo -n "ok"
+			else
+				echo "failed"
+				exit 1
+			fi
+
+			echo -n " -> verify: "
+			if run_script "$CHECK_SCRIPT"; then
+				echo "ok"
+			else
+				echo "failed"
+				exit 1
+			fi
+		fi
+
+		if [ "$CHANGE" == "$LAST_CHANGE" ]; then
+			break
+		fi
+	done < $PLAN_FILE
+}
+
+sqlman_revert() {
+	locate_plan_file
+	[ ! -f "$PLAN_FILE" ] && die "Cannot find plan file: '$PLAN_FILE'" || true
+
+	locate_target "$2"
+	locate_target_file
+	[ ! -f "$TARGET_FILE" ] && die "Cannot find target file: '$TARGET_FILE" || true
+
+	LAST_CHANGE=$1
+	if [ ! -z "$LAST_CHANGE" ] && ! grep "^$LAST_CHANGE$" "$PLAN_FILE" ; then
+		die "Cannot find change '$LAST_CHANGE' in plan file: '$PLAN_FILE'"
+	fi
+
+	locate_engine_dir
+	locate_changes_dir
+
+	tac -r $PLAN_FILE | while read -r CHANGE
+	do
+		[ -z "$CHANGE" ] && continue || true
+		locate_change_dir "$CHANGE"
+		locate_change_scripts
+
+		if run_script "$CHECK_SCRIPT" 2> /dev/null; then
+			echo -n "${CHANGE} -> revert: "
+			if run_script "$REVERT_SCRIPT"; then
+				echo -n "ok"
+			else
+				echo -n " failed"
+				exit 1
+			fi
+
+			echo -n " -> verify: "
+			if run_script "$CHECK_SCRIPT"; then
+				echo "failed"
+				exit 1
+			else
+				echo "ok"
+			fi
+		else
+			continue
+		fi
+
+		if [ "$CHANGE" == "$LAST_CHANGE" ]; then
+			break
+		fi
+	done
+}
+
+locate_changes_dir() {
+	CHANGES_DIR="${CHANGES_DIR:-changes}"
+}
+
+locate_change_dir() {
+	CHANGE_DIR="${CHANGES_DIR}/$1"
+}
+
+locate_engine_dir() {
+	ENGINE_DIR="${ENGINE_DIR:-engine}"
+	[ ! -x "$ENGINE_DIR/run" ] && die "Engine does not provide a 'run' script" || true
+	[ ! -d "$ENGINE_DIR/template" ] && die "Engine does not provide a 'template' folder" || true
+}
+
+locate_plan_file() {
+	PLAN_FILE="${PLAN_FILE:-sqlman.plan}"
+}
+
+locate_target() {
+	TARGET="${1:-${TARGET:-default}}"
+}
+
+locate_target_file() {
+	TARGETS_DIR="${TARGETS_DIR:-targets}"
+	TARGET_FILE="$TARGETS_DIR/$TARGET"
+}
+
+locate_change_scripts() {
+	CHECK_SCRIPT="${CHANGE_DIR}/check"
+	DEPLOY_SCRIPT="${CHANGE_DIR}/deploy"
+	REVERT_SCRIPT="${CHANGE_DIR}/revert"
+}
+
+run_script() {
+	"$ENGINE_DIR/run" "$TARGET_FILE" < "$1"
+}
+
+main $@
